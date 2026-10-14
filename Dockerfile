@@ -25,8 +25,11 @@ RUN reflex export --frontend-only --no-zip
 FROM python:3.13-slim
 
 COPY --from=caddy:2 /usr/bin/caddy /usr/bin/caddy
+# The Reflex version is pinned in the image, so skip the PyPI "newer version"
+# lookup that would otherwise delay every start.
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PORT=8080 \
-    REFLEX_BACKEND_HOST=127.0.0.1 REFLEX_BACKEND_PORT=8000
+    REFLEX_BACKEND_HOST=127.0.0.1 REFLEX_BACKEND_PORT=8000 \
+    REFLEX_CHECK_LATEST_VERSION=false
 
 WORKDIR /app
 # The app user owns /app so Reflex can write its runtime files there; Caddy
