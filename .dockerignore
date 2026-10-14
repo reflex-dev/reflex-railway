@@ -9,7 +9,7 @@
 .env
 .env.*
 uploaded_files
-Dockerfile.*
+Dockerfile
 .dockerignore
 .railway
 README.md

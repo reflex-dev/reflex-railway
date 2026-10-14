@@ -6,25 +6,11 @@
 
 :{$PORT:8080} {
 	encode zstd gzip
-	log
 
-	# Frontend readiness, independent of the backend so deploys are not coupled.
-	handle /healthz {
-		respond "ok" 200
-	}
-
-	# Reflex backend routes go to every Backend replica on the private network.
+	# Reflex backend routes go to the backend process in this container.
 	@backend path /_event /_event/* /ping /_health /_upload /_upload/*
 	handle @backend {
-		reverse_proxy {
-			dynamic a {$BACKEND_HOST:backend.railway.internal} {$BACKEND_PORT:8000} {
-				refresh 10s
-			}
-			lb_policy round_robin
-			lb_retries 2
-			lb_try_duration 5s
-			fail_duration 10s
-		}
+		reverse_proxy {$REFLEX_BACKEND_HOST:127.0.0.1}:{$REFLEX_BACKEND_PORT:8000}
 	}
 
 	handle {

@@ -1,5 +1,5 @@
-// Railway Infrastructure as Code for this template: four services, each
-// deployed and scaled independently. Apply it to your own project with
+// Railway Infrastructure as Code for this template: the Reflex app, Postgres
+// and Redis as three services. Apply it to your own project with
 //   cd .railway && npm install && railway config plan && railway config apply
 // Point `REPO` at your fork first.
 import { defineRailway, github, postgres, project, redis, service } from "railway/iac";
@@ -10,29 +10,17 @@ export default defineRailway(() => {
   const db = postgres("Postgres");
   const cache = redis("Redis");
 
-  const backend = service("Backend", {
+  const app = service("Reflex", {
     source: github(REPO, { branch: "main" }),
     preDeploy: "alembic upgrade head",
     healthcheck: "/_health",
     env: {
-      RAILWAY_DOCKERFILE_PATH: "Dockerfile.backend",
-      PORT: "8000",
+      PORT: "8080",
       DATABASE_URL: db.env.DATABASE_URL,
       REFLEX_REDIS_URL: cache.env.REDIS_URL,
       GRANIAN_WORKERS: "2",
     },
   });
 
-  const frontend = service("Frontend", {
-    source: github(REPO, { branch: "main" }),
-    healthcheck: "/healthz",
-    env: {
-      RAILWAY_DOCKERFILE_PATH: "Dockerfile.frontend",
-      PORT: "8080",
-      BACKEND_HOST: backend.env.RAILWAY_PRIVATE_DOMAIN,
-      BACKEND_PORT: backend.env.PORT,
-    },
-  });
-
-  return project("Reflex", { resources: [frontend, backend, db, cache] });
+  return project("Reflex", { resources: [app, db, cache] });
 });

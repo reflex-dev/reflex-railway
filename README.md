@@ -6,7 +6,7 @@
 
 ## About Hosting Reflex
 
-A Reflex app has two parts: a static frontend (HTML, CSS, and JavaScript) and a Python backend that keeps a WebSocket open to every browser session. This template runs them as separate services. The **Frontend** service builds the static site and serves it with Caddy, which also forwards backend routes over Railway's private network. The **Backend** service runs the Reflex event server and never gets a public domain. **Postgres** stores application data, and **Redis** stores session state, so backend replicas and workers can share it. Database migrations run once per deploy before the new backend version takes traffic.
+A Reflex app has two parts: a static frontend (HTML, CSS, and JavaScript) and a Python backend that keeps a WebSocket open to every browser session. This template builds the frontend once, when the image is built, so deploys, restarts and new replicas start in seconds without compiling anything. At runtime the **Reflex** service serves everything on one port: Caddy serves the prebuilt frontend and forwards backend routes to the Reflex backend in the same container. **Postgres** stores application data and **Redis** stores session state, each as its own Railway service, so you can add Reflex replicas. Database migrations run once per deploy, before the new version takes traffic.
 
 ## Common Use Cases
 
@@ -32,48 +32,44 @@ A Reflex app has two parts: a static frontend (HTML, CSS, and JavaScript) and a 
 ### Implementation Details
 
 ```
-            Internet (HTTPS)
-                   │
-          ┌────────▼────────┐  static files from the Reflex export
-          │    Frontend     │  /_event /ping /_health /_upload
-          │     (Caddy)     ├─────────────────────────┐
-          └─────────────────┘                         │ private network
-                                             ┌────────▼────────┐
-                                             │     Backend     │  replicas scale
-                                             │ (Reflex/Granian)│  independently
-                                             └───┬─────────┬───┘
-                                    private net  │         │  private net
-                                     ┌───────────▼──┐  ┌───▼───────────┐
-                                     │   Postgres   │  │     Redis     │
-                                     │ (app data)   │  │ (state store) │
-                                     └──────────────┘  └───────────────┘
+           Internet (HTTPS, Railway edge)
+                        │
+        ┌───────────────▼────────────────┐
+        │ Reflex service  (port $PORT)    │
+        │                                 │
+        │  Caddy ── static frontend,      │  built at image build time
+        │    │      precompressed, cached │
+        │    │ /_event /ping /_health     │
+        │    ▼ /_upload                   │
+        │  Reflex backend (127.0.0.1)     │  Granian workers
+        └───────┬─────────────────┬───────┘
+     private net│                 │private net
+        ┌───────▼──────┐   ┌──────▼────────┐
+        │   Postgres   │   │     Redis     │
+        │  (app data)  │   │ (state store) │
+        └──────────────┘   └───────────────┘
 ```
 
-| Service  | Source                     | Public | Health check | Notes |
-|----------|----------------------------|--------|--------------|-------|
-| Frontend | `Dockerfile.frontend`      | Yes    | `/healthz`   | `reflex export --frontend-only`, served by Caddy. Proxies backend routes to every backend replica. |
-| Backend  | `Dockerfile.backend`       | No     | `/_health`   | Pre-deploy runs `alembic upgrade head`. `/_health` returns 503 until Postgres and Redis are reachable, so a deploy goes live only when it can serve traffic. |
-| Postgres | Railway Postgres           | No     | n/a          | Persistent volume. Referenced as `${{Postgres.DATABASE_URL}}`. |
-| Redis    | Railway Redis              | No     | n/a          | Persistent volume, password protected. Referenced as `${{Redis.REDIS_URL}}`. |
+| Service  | Source | Public | Health check | Notes |
+|----------|--------|--------|--------------|-------|
+| Reflex   | `Dockerfile` | Yes | `/_health` | Pre-deploy runs `alembic upgrade head`. `/_health` returns 503 until Postgres and Redis are reachable, so a deploy goes live only when it can serve traffic. |
+| Postgres | Railway Postgres | No | n/a | Persistent volume. Referenced as `${{Postgres.DATABASE_URL}}`. |
+| Redis    | Railway Redis | No | n/a | Persistent volume, password protected. Referenced as `${{Redis.REDIS_URL}}`. |
 
-Backend variables:
+Reflex service variables:
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.backend` | Selects the backend image. |
-| `PORT` | `8000` | Port the backend listens on. The Frontend reads it through a reference variable. |
+| `PORT` | `8080` | Public port. Railway routes the domain here. |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Private Postgres connection. `rxconfig.py` selects the psycopg driver. |
 | `REFLEX_REDIS_URL` | `${{Redis.REDIS_URL}}` | Private Redis connection for session state. |
-| `GRANIAN_WORKERS` | `2` | Worker processes per replica. Raise it for larger instances, or add replicas. |
+| `GRANIAN_WORKERS` | `2` | Backend worker processes per replica. Raise it for larger instances, or add replicas. |
 
-Frontend variables:
+How the container runs:
 
-| Variable | Value | Purpose |
-|----------|-------|---------|
-| `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.frontend` | Selects the frontend image. |
-| `PORT` | `8080` | Port Caddy listens on. Railway routes the public domain here. |
-| `BACKEND_HOST` | `${{Backend.RAILWAY_PRIVATE_DOMAIN}}` | Private hostname of the Backend service. |
-| `BACKEND_PORT` | `${{Backend.PORT}}` | Backend port. |
+- `Dockerfile` runs `reflex export --frontend-only` in a build stage. The runtime image has the prebuilt frontend, the Python environment and Caddy, but no bun or `node_modules`.
+- `start.sh` starts Caddy on `$PORT` and `reflex run --env prod --backend-only` on `127.0.0.1:8000`. If either process exits, the container exits and Railway restarts it.
+- The page and the backend share one origin, so no `REFLEX_API_URL` or CORS setup is needed.
 
 #### Build your own app
 
@@ -86,9 +82,9 @@ The included guestbook (`app/app.py`, `app/models.py`) shows the full loop: a fo
    alembic revision --autogenerate -m "describe the change"
    ```
 
-3. Commit and push. Railway rebuilds both services, the Backend's pre-deploy step applies the migration, and the new version goes live once `/_health` passes.
+3. Commit and push. Railway rebuilds the image, the pre-deploy step applies the migration, and the new version goes live once `/_health` passes.
 
-If your app adds backend API routes (for example with `api_transformer`), add their paths to the `@backend` matcher in `Caddyfile`.
+If your app adds backend API routes (for example with `api_transformer`), add their paths to the `@backend` matcher in `Caddyfile`. Changes to pages or styles take effect on the next deploy, because the frontend is built into the image.
 
 #### Run locally
 
@@ -103,13 +99,13 @@ To use Postgres and Redis locally, export the variables from `.env.example` firs
 
 #### Scale
 
-- **More traffic:** add Backend replicas in the service settings. Redis holds the session state, so any replica can serve any session. Caddy re-resolves the Backend's private hostname every 10 seconds and spreads new connections across the addresses it returns.
-- **Bigger replicas:** raise `GRANIAN_WORKERS`.
+- **More traffic:** add replicas of the Reflex service. Redis holds the session state, so any replica can serve any session, and Railway's edge spreads connections across replicas.
+- **Bigger replicas:** raise `GRANIAN_WORKERS` and the service's memory.
 - **Uploads:** `rx.upload` writes to the container filesystem by default, which is not shared between replicas. Store uploads in a [Railway Bucket](https://docs.railway.com/storage-buckets) or other object storage.
 
 #### Infrastructure as Code
 
-`.railway/railway.ts` describes the same four services with Railway's [Infrastructure as Code](https://docs.railway.com/infrastructure-as-code). To manage your own project from code, set `REPO` to your fork, then run `cd .railway && npm install && railway config plan`.
+`.railway/railway.ts` describes the same three services with Railway's [Infrastructure as Code](https://docs.railway.com/infrastructure-as-code). To manage your own project from code, set `REPO` to your fork, then run `cd .railway && npm install && railway config plan`.
 
 ### Why Deploy Reflex on Railway?
 
