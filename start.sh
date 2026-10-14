@@ -3,11 +3,13 @@
 # If either exits, stop the other and exit so Railway restarts the container.
 set -u
 
+# Install the trap first so a stop request during start-up is not lost.
+stopping=0
+trap 'stopping=1; kill -TERM $(jobs -p) 2>/dev/null' TERM INT
+
 caddy run --config Caddyfile --adapter caddyfile &
 reflex run --env prod --backend-only &
 
-stopping=0
-trap 'stopping=1; kill -TERM $(jobs -p) 2>/dev/null' TERM INT
 wait -n
 status=$?
 kill -TERM $(jobs -p) 2>/dev/null

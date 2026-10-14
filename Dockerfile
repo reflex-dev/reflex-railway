@@ -40,6 +40,8 @@ COPY --chown=reflex --from=builder /app/.venv .venv
 COPY --chown=reflex --from=builder /app/.web/backend .web/backend
 COPY --from=builder /app/.web/build/client /srv
 COPY --chown=reflex . .
+# Dependencies are already compiled; compile the app source too.
+RUN python -m compileall -q rxconfig.py app alembic
 USER reflex
 
 EXPOSE 8080
