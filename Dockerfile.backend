@@ -1,0 +1,25 @@
+# Backend service: runs the Reflex backend (event websocket, /ping, /_health,
+# /_upload). It is reachable only over Railway's private network; the Frontend
+# service proxies browser traffic to it.
+FROM python:3.13-slim
+
+# `::` accepts IPv4 and IPv6 connections, as Railway's private network needs.
+ENV UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1 PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 \
+    REFLEX_BACKEND_HOST=::
+
+WORKDIR /app
+# The app user owns /app so Reflex can write its runtime files there.
+RUN adduser --disabled-password --gecos "" --home /app reflex && chown reflex /app
+
+# Install requirements before copying the app so code edits reuse this layer.
+# uv is mounted only for this step and does not end up in the image.
+COPY requirements.txt .
+RUN --mount=from=ghcr.io/astral-sh/uv:0.12,source=/uv,target=/bin/uv \
+    uv venv && uv pip install -r requirements.txt
+
+COPY --chown=reflex . .
+USER reflex
+
+# Migrations run once per deploy in Railway's pre-deploy step
+# (`alembic upgrade head`), not on every replica start.
+CMD ["sh", "-c", "exec reflex run --env prod --backend-only --backend-port ${PORT:-8000}"]

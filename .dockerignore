@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+.web
+.states
+**/__pycache__
+*.py[cod]
+*.db
+.env
+.env.*
+uploaded_files
+Dockerfile.*
+.dockerignore
+.railway
+README.md
+LICENSE

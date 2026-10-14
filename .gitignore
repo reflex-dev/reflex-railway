@@ -1,0 +1,13 @@
+.web
+.states
+*.py[cod]
+*.db
+__pycache__/
+.web/
+.states/
+.venv/
+.env
+assets/external/
+uploaded_files/
+.railway/node_modules/
+dump.rdb

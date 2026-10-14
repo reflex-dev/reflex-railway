@@ -1,0 +1,42 @@
+{
+	admin off
+	# Railway's edge terminates TLS; Caddy serves plain HTTP on $PORT.
+	auto_https off
+}
+
+:{$PORT:8080} {
+	encode zstd gzip
+	log
+
+	# Frontend readiness, independent of the backend so deploys are not coupled.
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Reflex backend routes go to every Backend replica on the private network.
+	@backend path /_event /_event/* /ping /_health /_upload /_upload/*
+	handle @backend {
+		reverse_proxy {
+			dynamic a {$BACKEND_HOST:backend.railway.internal} {$BACKEND_PORT:8000} {
+				refresh 10s
+			}
+			lb_policy round_robin
+			lb_retries 2
+			lb_try_duration 5s
+			fail_duration 10s
+		}
+	}
+
+	handle {
+		root * /srv
+
+		# Vite fingerprints everything it writes under /assets.
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} {path}/ /404.html
+		file_server {
+			precompressed br zstd gzip
+		}
+	}
+}
