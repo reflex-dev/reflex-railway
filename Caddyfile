@@ -1,0 +1,28 @@
+{
+	admin off
+	# Railway's edge terminates TLS; Caddy serves plain HTTP on $PORT.
+	auto_https off
+}
+
+:{$PORT:8080} {
+	encode zstd gzip
+
+	# Reflex backend routes go to the backend process in this container.
+	@backend path /_event /_event/* /ping /_health /_upload /_upload/*
+	handle @backend {
+		reverse_proxy {$REFLEX_BACKEND_HOST:127.0.0.1}:{$REFLEX_BACKEND_PORT:8000}
+	}
+
+	handle {
+		root * /srv
+
+		# Vite fingerprints everything it writes under /assets.
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} {path}/ /404.html
+		file_server {
+			precompressed br zstd gzip
+		}
+	}
+}
