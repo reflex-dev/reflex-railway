@@ -1,6 +1,6 @@
 # Deploy and Host Reflex with Railway
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/r64A10?utm_medium=integration&utm_source=button&utm_campaign=reflex)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/reflex?utm_medium=integration&utm_source=button&utm_campaign=reflex)
 
 [Reflex](https://reflex.dev) is an open-source framework for building full-stack web apps in pure Python. You write the UI and the backend logic in Python, and Reflex compiles the frontend to a fast React app. This template deploys a production-ready Reflex app with Postgres and Redis on Railway.
 

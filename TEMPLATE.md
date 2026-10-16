@@ -60,4 +60,4 @@ Go to **Workspace settings → Templates → Publish**:
 - **Demo project:** optional; link the project from step 2.
 - Publish from the official Reflex workspace (`Reflex`) so the template shows the right author.
 
-The Deploy on Railway button in `README.md` points at template `r64A10`, which works before publishing. Publishing lists it in the marketplace. If you create a different template, update the code in the button URL.
+The Deploy on Railway button in `README.md` points at the published template `reflex` (https://railway.com/deploy/reflex). Update it with `railway templates update <id> --readme-file ...` after README changes, since the marketplace overview is a copy, not a live link. If you create a different template, update the code in the button URL.
