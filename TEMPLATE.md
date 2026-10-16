@@ -6,6 +6,10 @@ Railway no longer reads `railway.json`/`railway.toml` for new services, so every
 
 ## 1. Create the template
 
+Adding the GitHub repo to the composer creates only the Reflex service. The composer does not read Postgres, Redis, variables or settings from the repo, so add them as described below.
+
+Shortcut: if you already have a working project with all three services, clone it into a template draft with `railway templates create --project <id> --environment production`, then tidy the names and icons in the editor.
+
 Open **Workspace settings → Templates → New Template** and add three services. Use exactly these names (capital case, no dashes), because the reference variables depend on them.
 
 ### Postgres
@@ -56,4 +60,4 @@ Go to **Workspace settings → Templates → Publish**:
 - **Demo project:** optional; link the project from step 2.
 - Publish from the official Reflex workspace (`Reflex`) so the template shows the right author.
 
-Then replace `REPLACE_WITH_TEMPLATE_CODE` in `README.md` with the template code from the template URL.
+The Deploy on Railway button in `README.md` points at template `r64A10`, which works before publishing. Publishing lists it in the marketplace. If you create a different template, update the code in the button URL.
